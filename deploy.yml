@@ -55,5 +55,3 @@ jobs:
     - uses: actions/checkout@v4
     - name: Deploy to Kubernetes
       run: |
-        kubectl create namespace ${{ env.K8S_NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
-        kubectl apply -f k8s-manifests/ -n ${{ env.K8S_NAMESPACE }}
