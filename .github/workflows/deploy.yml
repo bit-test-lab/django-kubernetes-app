@@ -5,37 +5,63 @@ on:
     branches: [ main ]
 
 env:
-  REGISTRY: vm1:5000
-  IMAGE_NAME: django-kubernetes-app
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
   K8S_NAMESPACE: django-app
 
 jobs:
-  build-and-push:
+  test:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
-    - name: Build Docker image
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    - name: Install dependencies
       run: |
-        docker build -t $REGISTRY/$IMAGE_NAME:latest .
-        
-    - name: Push Docker image
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    - name: Run tests
       run: |
-        docker push $REGISTRY/$IMAGE_NAME:latest
+        python manage.py test
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - uses: actions/checkout@v4
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
     steps:
     - uses: actions/checkout@v4
-    
     - name: Deploy to Kubernetes
       run: |
+        # Создаем namespace если не существует
+        kubectl create namespace ${{ env.K8S_NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+        # Применяем манифесты
+        kubectl apply -f k8s-manifests/ -n ${{ env.K8S_NAMESPACE }}
         # Обновляем образ в deployment
-        kubectl set image deployment/django-deployment django-app=$REGISTRY/$IMAGE_NAME:latest -n $K8S_NAMESPACE
-        
+        kubectl set image deployment/django-deployment django-app=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest -n ${{ env.K8S_NAMESPACE }}
         # Ждем пока поды перезапустятся
-        kubectl rollout status deployment/django-deployment -n $K8S_NAMESPACE --timeout=300s
-        
+        kubectl rollout status deployment/django-deployment -n ${{ env.K8S_NAMESPACE }} --timeout=300s
         # Показываем статус
-        kubectl get pods,svc,ingress -n $K8S_NAMESPACE
+        kubectl get pods,svc,ingress -n ${{ env.K8S_NAMESPACE }}
