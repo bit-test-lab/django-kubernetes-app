@@ -55,13 +55,5 @@ jobs:
     - uses: actions/checkout@v4
     - name: Deploy to Kubernetes
       run: |
-        # Создаем namespace если не существует
         kubectl create namespace ${{ env.K8S_NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
-        # Применяем манифесты
         kubectl apply -f k8s-manifests/ -n ${{ env.K8S_NAMESPACE }}
-        # Обновляем образ в deployment
-        kubectl set image deployment/django-deployment django-app=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest -n ${{ env.K8S_NAMESPACE }}
-        # Ждем пока поды перезапустятся
-        kubectl rollout status deployment/django-deployment -n ${{ env.K8S_NAMESPACE }} --timeout=300s
-        # Показываем статус
-        kubectl get pods,svc,ingress -n ${{ env.K8S_NAMESPACE }}
