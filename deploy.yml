@@ -46,14 +46,3 @@ jobs:
         context: .
         push: true
         tags: ${{ env.REGISTRY }}/${{ django-kubernetes-app:latest }}:latest
-
-  deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    steps:
-    - uses: actions/checkout@v4
-    - name: Deploy to Kubernetes
-      run: |
-        # Создаем namespace если не существует
-        kubectl create namespace ${{ env.K8S_NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
