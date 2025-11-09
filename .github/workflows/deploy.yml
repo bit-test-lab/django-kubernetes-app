@@ -1,0 +1,41 @@
+name: Deploy Django App to Kubernetes
+
+on:
+  push:
+    branches: [ main ]
+
+env:
+  REGISTRY: vm1:5000
+  IMAGE_NAME: django-kubernetes-app
+  K8S_NAMESPACE: django-app
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Build Docker image
+      run: |
+        docker build -t $REGISTRY/$IMAGE_NAME:latest .
+        
+    - name: Push Docker image
+      run: |
+        docker push $REGISTRY/$IMAGE_NAME:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Deploy to Kubernetes
+      run: |
+        # Обновляем образ в deployment
+        kubectl set image deployment/django-deployment django-app=$REGISTRY/$IMAGE_NAME:latest -n $K8S_NAMESPACE
+        
+        # Ждем пока поды перезапустятся
+        kubectl rollout status deployment/django-deployment -n $K8S_NAMESPACE --timeout=300s
+        
+        # Показываем статус
+        kubectl get pods,svc,ingress -n $K8S_NAMESPACE
